@@ -3,6 +3,9 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+
 min_int8 = np.iinfo(np.int8).min
 
 
@@ -14,8 +17,8 @@ def _apply_kernel(board: np.ndarray, kernel: np.ndarray, row: int, col: int):
     ker_col_sub_r: int = 0
     board_row_sub_l: int = -1
     board_col_sub_l: int = -1
-    board_row_sub_r: int = 1
-    board_col_sub_r: int = 1
+    board_row_sub_r: int = -1
+    board_col_sub_r: int = -1
     if row == 0:
         board_row_sub_l = 0
         ker_row_sub_l = 1
@@ -113,17 +116,21 @@ class BattleshipEnv(gym.Env):
         for ship_num, ship_size in enumerate(self.ship_sizes):
             placed = False
             while not placed:
-                orientation_vert = self.np_random.choice(True, False)
+                orientation_vert = self.np_random.choice((True, False))
                 if orientation_vert:
-                    row = self.np_random.integers(0, self.board_size[0] - ship_size)
+                    row = self.np_random.integers(0, self.board_size[0])
                     col = self.np_random.integers(0, self.board_size[1])
+                    if row > self.board_size[0] - ship_size:
+                        continue
                     kernel = self.ship_kernels_vert[ship_num]
                     if np.all(_apply_kernel(self.board, kernel, row, col) == 0):
                         self.board[row : row + ship_size, col] = ship_num + 1
                         placed = True
                 else:
                     row = self.np_random.integers(0, self.board_size[0])
-                    col = self.np_random.integers(0, self.board_size[1] - ship_size)
+                    col = self.np_random.integers(0, self.board_size[1])
+                    if col > self.board_size[1] - ship_size:
+                        continue
                     kernel = self.ship_kernels_horiz[ship_num]
                     if np.all(_apply_kernel(self.board, kernel, row, col) == 0):
                         self.board[row, col : col + ship_size] = ship_num + 1
@@ -171,5 +178,32 @@ class BattleshipEnv(gym.Env):
         print("Step Count:", self.step_count)
 
 
-env = BattleshipEnv()
-env.reset()
+if __name__ == "__main__":
+    env = BattleshipEnv()
+    env.reset()
+
+    master = np.zeros((10, 10), dtype=np.int32)
+    for _ in range(500000):
+        master += env.board >= 1
+        env.reset()
+    print(master)
+
+    plt.imshow(master, cmap="hot", interpolation="nearest")
+    print(np.isclose(master, master.T, atol=2e2))
+    plt.show()
+    plt.imshow(
+        np.isclose(master, master.T, atol=2e2), cmap="hot", interpolation="nearest"
+    )
+    plt.show()
+    plt.imshow(
+        np.isclose(master, master.T, atol=6e2), cmap="hot", interpolation="nearest"
+    )
+    plt.show()
+    plt.imshow(np.abs(master - master.T), cmap="hot", interpolation="nearest")
+    plt.show()
+    plt.imshow(
+        np.abs(master - master.T) / (master + master.T),
+        cmap="hot",
+        interpolation="nearest",
+    )
+    plt.show()
