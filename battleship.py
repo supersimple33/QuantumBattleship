@@ -10,36 +10,36 @@ min_int8 = np.iinfo(np.int8).min
 
 def _apply_kernel(board: np.ndarray, kernel: np.ndarray, row: int, col: int):
     """Applies the kernel to the board at a specific location accounting for padding and with centering on the actual placement"""
-    ker_row_sub_l: int = 0
-    ker_col_sub_l: int = 0
-    ker_row_sub_r: int = 0
-    ker_col_sub_r: int = 0
-    board_row_sub_l: int = -1
-    board_col_sub_l: int = -1
-    board_row_sub_r: int = -1
-    board_col_sub_r: int = -1
-    if row == 0:
-        board_row_sub_l = 0
-        ker_row_sub_l = 1
-    elif row == board.shape[0] - 1:
-        board_row_sub_r = 0
-        ker_row_sub_r = -1
-    if col == 0:
-        board_col_sub_l = 0
-        ker_col_sub_l = 1
-    elif col == board.shape[1] - 1:
-        board_col_sub_r = 0
-        ker_col_sub_r = -1
+    if (
+        row == 0
+        or col == 0
+        or row == board.shape[0] - 1
+        or col == board.shape[1] - 1
+        or row + kernel.shape[0] - 1 > board.shape[0]
+        or col + kernel.shape[1] - 1 > board.shape[1]
+    ):
+        board = np.pad(
+            board,
+            ((1, 1), (1, 1)),
+            mode="constant",
+            constant_values=0,
+        )
+    else:
+        row, col = row - 1, col - 1
+
+    # assert (
+    #     row >= 0
+    #     and col >= 0
+    #     and row + kernel.shape[0] <= board.shape[0]
+    #     and col + kernel.shape[1] <= board.shape[1]
+    # ), "Kernel placement out of bounds"
 
     return (
         board[
-            board_row_sub_l + row : board_row_sub_r + row + kernel.shape[0],
-            board_col_sub_l + col : board_col_sub_r + col + kernel.shape[1],
+            row : row + kernel.shape[0],
+            col : col + kernel.shape[1],
         ]
-        * kernel[
-            ker_row_sub_l : ker_row_sub_r + kernel.shape[0],
-            ker_col_sub_l : ker_col_sub_r + kernel.shape[1],
-        ]
+        * kernel
     )
 
 
@@ -75,11 +75,11 @@ class BattleshipEnv(gym.Env):
         self.total_shots = sum(ship_sizes)
         self.ship_count = len(ship_sizes)
         self.ship_kernels_horiz = [
-            zero_corners(np.ones((3, ship_size), dtype=np.int8))
+            zero_corners(np.ones((3, ship_size + 2), dtype=np.int8))
             for ship_size in ship_sizes
         ]
         self.ship_kernels_vert = [
-            zero_corners(np.ones((ship_size, 3), dtype=np.int8))
+            zero_corners(np.ones((ship_size + 2, 3), dtype=np.int8))
             for ship_size in ship_sizes
         ]
 
@@ -186,6 +186,7 @@ class BattleshipEnv(gym.Env):
                 interpolation="nearest",
             )
             plt.show()
+
 
 if __name__ == "__main__":
     env = BattleshipEnv()
