@@ -3,8 +3,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 min_int8 = np.iinfo(np.int8).min
 
@@ -170,13 +169,23 @@ class BattleshipEnv(gym.Env):
         return (self.observations, reward, self.done, self.truncated, {})
 
     def render(self, mode="human"):
-        print("Current Board:")
-        print(self.board)
-        print("Observations:")
-        print(self.observations)
-        print("Hits:", self.hits)
-        print("Step Count:", self.step_count)
-
+        if mode == "human":
+            print("Current Board:")
+            print(self.board)
+            print("Observations:")
+            print(self.observations)
+            print("Hits:", self.hits)
+            print("Step Count:", self.step_count)
+        elif mode == "playing":
+            print("Observations:")
+            print(self.observations)
+        elif mode == "2d":
+            plt.imshow(
+                self.observations[0] + 2 * self.observations[1],
+                cmap="hot",
+                interpolation="nearest",
+            )
+            plt.show()
 
 if __name__ == "__main__":
     env = BattleshipEnv()
