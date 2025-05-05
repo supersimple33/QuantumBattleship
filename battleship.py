@@ -187,6 +187,10 @@ class BattleshipEnv(gym.Env):
             )
             plt.show()
 
+    def binary_ships(self) -> np.ndarray:
+        """Returns the board with ships as True and empty spaces as False"""
+        return self.board > 0
+
 
 if __name__ == "__main__":
     env = BattleshipEnv()
