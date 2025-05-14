@@ -1,7 +1,10 @@
 import pennylane as qml
-from pennylane import numpy as np
+
+# from pennylane import numpy as np
+import numpy as np
 from pennylane.wires import WiresLike
 from typing import Union
+import torch
 
 np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 
@@ -27,6 +30,7 @@ np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
     assert len(wires) == params.shape[1], "params and wires must have the same length"
+    assert wires is not torch.Tensor, "wires must be a list of wires"
     qml.BasicEntanglerLayers(
         params,
         wires,
@@ -36,6 +40,7 @@ def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 
 def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) -> None:
     """Creates a pooling layer. Which consists of 4 rotations a CNOT and a unrotation of the target qubit"""
+    assert wires is not torch.Tensor, "wires must be a list of wires"
 
     for i, wire in enumerate(wires):
         qml.RY(params[i], wires=wire)
@@ -96,6 +101,8 @@ def fully_connected_op(
     assert (
         weight_params.shape[1] - 1 == weight_params.shape[0]
     ), "params must be a square matrix"
+    assert x_wires is not torch.Tensor, "wires must be a list of wires"
+    assert b_wires is not torch.Tensor, "wires must be a list of wires"
 
     for i in range(weight_params.shape[0]):
         for j in range(len(x_wires)):
@@ -109,3 +116,40 @@ def fully_connected_op(
         qml.RY(b_params[i], wires=b_wires[i])
     for i in range(len(b_wires)):
         qml.CNOT(wires=[b_wires[i], x_wires[i]])
+
+
+class ProbExtractionLayer(torch.nn.Module):
+    def __init__(self):
+        super(ProbExtractionLayer, self).__init__()
+
+    def forward(self, x):
+        # assert x.shape[-1] == 2, "The last dimension must have size 2"
+        return x[..., 1]
+
+
+class PatchedTorchLayer(qml.qnn.TorchLayer):
+
+    def _evaluate_qnode(self, x):
+        """Evaluates the QNode for a single input datapoint.
+
+        Args:
+            x (tensor): the datapoint
+
+        Returns:
+            tensor: output datapoint
+        """
+        kwargs = {
+            **{self.input_arg: x},
+            **{arg: weight.to(x) for arg, weight in self.qnode_weights.items()},
+        }
+        res = self.qnode(**kwargs)
+
+        if isinstance(res, torch.Tensor):
+            return res.type(x.dtype)
+
+        if isinstance(res, tuple) and len(res) > 1:
+            if all(isinstance(r, torch.Tensor) for r in res):
+                return tuple(_combine_dimensions([r]) for r in res)  # pragma: no cover
+            return tuple(_combine_dimensions(r) for r in res)
+
+        return torch.hstack(res).type(x.dtype)
