@@ -1,9 +1,11 @@
 import pennylane as qml
 from pennylane import numpy as np
 from pennylane.wires import WiresLike
+from typing import Union
 
+np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 
-# def convolution_layer(params: np.ndarray[np.float_], wires: WiresLike) -> None:
+# def convolution_layer(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 #     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
 #     assert len(params.shape) == 2, "params must be a 2D array"
 #     assert len(wires) == params.shape[1], "params and wires must have the same length"
@@ -22,9 +24,17 @@ from pennylane.wires import WiresLike
 #     )
 
 
-def pooling_layer(
-    params: np.ndarray[np.float_] | list[float], wires: WiresLike
-) -> None:
+def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
+    """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
+    assert len(wires) == params.shape[1], "params and wires must have the same length"
+    qml.BasicEntanglerLayers(
+        params,
+        wires,
+        qml.RY,
+    )
+
+
+def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) -> None:
     """Creates a pooling layer. Which consists of 4 rotations a CNOT and a unrotation of the target qubit"""
 
     for wire in wires:
@@ -36,9 +46,41 @@ def pooling_layer(
     qml.RY(-params[-1], wires=wires[-1])
 
 
-def fully_connected_layer(
-    weight_params: np.ndarray[np.float_],
-    b_params: np.ndarray[np.float_],
+def convolution_pooling_op(
+    conv_params: np.ndarray[np_floats],
+    pool_params: np.ndarray[np_floats],
+    wire_arr: np.ndarray,
+    STRIDE: int,
+) -> None:
+    KERNEL_SIZE = conv_params.shape[0]
+    N = wire_arr.shape[0]
+
+    # Convolution layer
+    for k in range(0, KERNEL_SIZE, STRIDE):
+        for l in range(0, KERNEL_SIZE, STRIDE):
+            for i in range(0, N, KERNEL_SIZE):
+                for j in range(0, N, KERNEL_SIZE):
+                    convolution_op(
+                        conv_params,
+                        wire_arr.take(
+                            range(i + k, i + KERNEL_SIZE + k), mode="wrap", axis=0
+                        )
+                        .take(range(j + l, j + KERNEL_SIZE + k), mode="wrap", axis=1)
+                        .flatten(),
+                    )
+
+    # Pooling layer
+    for i in range(0, N, KERNEL_SIZE):
+        for j in range(0, N, KERNEL_SIZE):
+            pooling_op(
+                pool_params,
+                wire_arr[i : i + KERNEL_SIZE, j : j + KERNEL_SIZE].flatten(),
+            )
+
+
+def fully_connected_op(
+    weight_params: np.ndarray[np_floats],
+    b_params: np.ndarray[np_floats],
     x_wires: WiresLike,
     b_wires: WiresLike,
 ) -> None:
