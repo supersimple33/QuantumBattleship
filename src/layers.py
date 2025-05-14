@@ -1,10 +1,12 @@
 import pennylane as qml
 
-# from pennylane import numpy as np
-import numpy as np
+from pennylane import numpy as np
+
+# import numpy as np
 from pennylane.wires import WiresLike
 from typing import Union
 import torch
+import tensorflow as tf
 
 np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 
@@ -59,10 +61,10 @@ def convolution_pooling_op(
 ) -> None:
     KERNEL_SIZE = conv_params.shape[1]
     N = wire_arr.shape[0]
-    conv_params = conv_params.reshape(
-        (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
+    conv_params = np.reshape(
+        conv_params, (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
     )
-    pool_params = pool_params.flatten()
+    pool_params = np.ravel(pool_params)
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
@@ -118,16 +120,95 @@ def fully_connected_op(
         qml.CNOT(wires=[b_wires[i], x_wires[i]])
 
 
+# MARK: - TensorFlow Stuff
+
+
+class PatchedKerasLayer(qml.qnn.KerasLayer):
+    def call(self, inputs):
+        """Evaluates the QNode on input data using the initialized weights.
+
+        Args:
+            inputs (tensor): data to be processed
+
+        Returns:
+            tensor: output data
+        """
+        inputs = tf.transpose(inputs, perm=(1, 2, 0))
+
+        # calculate the forward pass as usual
+        results = self._evaluate_qnode(inputs)
+
+        # reshape to the correct number of batch dims
+        # if has_batch_dim:
+        #     # pylint:disable=unexpected-keyword-arg,no-value-for-parameter
+        #     new_shape = tf.concat([batch_dims, tf.shape(results)[1:]], axis=0)
+        #     results = tf.reshape(results, new_shape)
+
+        return results
+
+    def _evaluate_qnode(self, x):
+        """Evaluates a QNode for a single input datapoint.
+
+        Args:
+            x (tensor): the datapoint
+
+        Returns:
+            tensor: output datapoint
+        """
+        kwargs = {
+            **{self.input_arg: x},
+            **{k: 1.0 * w for k, w in self.qnode_weights.items()},
+        }
+        res = self.qnode(**kwargs)
+
+        if isinstance(res, (list, tuple)):
+            # multi-return and no batch dim
+            return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
+
+        return res
+
+
+# MARK: - PyTorch Stuff
+
+
 class ProbExtractionLayer(torch.nn.Module):
     def __init__(self):
         super(ProbExtractionLayer, self).__init__()
 
+    # def forward(self, x):
+    #     # assert x.shape[-1] == 2, "The last dimension must have size 2"
+    #     return x[..., 1]
+
     def forward(self, x):
-        # assert x.shape[-1] == 2, "The last dimension must have size 2"
-        return x[..., 1]
+        # Convert expectation values to probabilities of measuring 1
+        return (x + 1) / 2
 
 
 class PatchedTorchLayer(qml.qnn.TorchLayer):
+    """this patch allows us to use 2d inputs and weights"""
+
+    def forward(self, inputs):  # pylint: disable=arguments-differ
+        """Evaluates a forward pass through the QNode based upon input data and the initialized
+        weights.
+
+        Args:
+            inputs (tensor): data to be processed
+
+        Returns:
+            tensor: output data
+        """
+
+        # in case the input has more than one batch dimension
+
+        # calculate the forward pass as usual
+        results = self._evaluate_qnode(inputs)
+
+        if isinstance(results, tuple):
+            return torch.stack(results, dim=0)
+
+        # reshape to the correct number of batch dims
+
+        return results
 
     def _evaluate_qnode(self, x):
         """Evaluates the QNode for a single input datapoint.
@@ -146,10 +227,5 @@ class PatchedTorchLayer(qml.qnn.TorchLayer):
 
         if isinstance(res, torch.Tensor):
             return res.type(x.dtype)
-
-        if isinstance(res, tuple) and len(res) > 1:
-            if all(isinstance(r, torch.Tensor) for r in res):
-                return tuple(_combine_dimensions([r]) for r in res)  # pragma: no cover
-            return tuple(_combine_dimensions(r) for r in res)
 
         return torch.hstack(res).type(x.dtype)
