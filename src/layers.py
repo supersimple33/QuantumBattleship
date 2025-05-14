@@ -52,8 +52,12 @@ def convolution_pooling_op(
     wire_arr: np.ndarray,
     STRIDE: int,
 ) -> None:
-    KERNEL_SIZE = conv_params.shape[0]
+    KERNEL_SIZE = conv_params.shape[1]
     N = wire_arr.shape[0]
+    conv_params = conv_params.reshape(
+        (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
+    )
+    pool_params = pool_params.reshape((1, pool_params.shape[0] * pool_params.shape[1]))
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
