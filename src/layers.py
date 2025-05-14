@@ -37,8 +37,8 @@ def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) -> None:
     """Creates a pooling layer. Which consists of 4 rotations a CNOT and a unrotation of the target qubit"""
 
-    for wire in wires:
-        qml.RY(params[wire], wires=wire)
+    for i, wire in enumerate(wires):
+        qml.RY(params[i], wires=wire)
     for i in range(len(wires) - 1):
         qml.CNOT(
             wires=[wires[i], wires[-1]]
@@ -57,7 +57,7 @@ def convolution_pooling_op(
     conv_params = conv_params.reshape(
         (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
     )
-    pool_params = pool_params.reshape((1, pool_params.shape[0] * pool_params.shape[1]))
+    pool_params = pool_params.flatten()
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
@@ -70,7 +70,8 @@ def convolution_pooling_op(
                             range(i + k, i + KERNEL_SIZE + k), mode="wrap", axis=0
                         )
                         .take(range(j + l, j + KERNEL_SIZE + k), mode="wrap", axis=1)
-                        .flatten(),
+                        .flatten()
+                        .tolist(),
                     )
 
     # Pooling layer
@@ -78,7 +79,7 @@ def convolution_pooling_op(
         for j in range(0, N, KERNEL_SIZE):
             pooling_op(
                 pool_params,
-                wire_arr[i : i + KERNEL_SIZE, j : j + KERNEL_SIZE].flatten(),
+                wire_arr[i : i + KERNEL_SIZE, j : j + KERNEL_SIZE].flatten().tolist(),
             )
 
 
@@ -90,7 +91,7 @@ def fully_connected_op(
 ) -> None:
     """Creates a fully connected layer. Which consists of ry gates a cnot chain and then cnot gates connecting the ryed b and x wires"""
     assert (
-        len(b_params) == len(x_wires) == len(b_wires) == len(weight_params.shape[1])
+        len(b_params) == len(x_wires) == len(b_wires) == weight_params.shape[1]
     ), "params and wires must have the same length"
     assert (
         weight_params.shape[1] - 1 == weight_params.shape[0]
@@ -101,7 +102,7 @@ def fully_connected_op(
             qml.RY(weight_params[i, j], wires=x_wires[j])
         for j in range(len(x_wires)):
             qml.CNOT(
-                wires=[x_wires[j % len(x_wires)], x_wires[i + j + 1 % len(x_wires)]]
+                wires=[x_wires[j % len(x_wires)], x_wires[(i + j + 1) % len(x_wires)]]
             )
 
     for i in range(len(b_wires)):
