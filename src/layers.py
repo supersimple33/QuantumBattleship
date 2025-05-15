@@ -123,6 +123,10 @@ def fully_connected_op(
 # MARK: - TensorFlow Stuff
 
 
+def prob_extraction(x):
+    return x[..., 1]
+
+
 class PatchedKerasLayer(qml.qnn.KerasLayer):
     def call(self, inputs):
         """Evaluates the QNode on input data using the initialized weights.
