@@ -76,7 +76,7 @@ def convolution_pooling_op(
                         wire_arr.take(
                             range(i + k, i + KERNEL_SIZE + k), mode="wrap", axis=0
                         )
-                        .take(range(j + l, j + KERNEL_SIZE + k), mode="wrap", axis=1)
+                        .take(range(j + l, j + KERNEL_SIZE + l), mode="wrap", axis=1)
                         .flatten()
                         .tolist(),
                     )
