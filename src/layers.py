@@ -54,17 +54,17 @@ def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) ->
 
 
 def convolution_pooling_op(
-    conv_params: np.ndarray[np_floats],
-    pool_params: np.ndarray[np_floats],
+    conv_params: np.ndarray[np_floats] | tf.Tensor,
+    pool_params: np.ndarray[np_floats] | tf.Tensor,
     wire_arr: np.ndarray,
     STRIDE: int,
 ) -> None:
     KERNEL_SIZE = conv_params.shape[1]
     N = wire_arr.shape[0]
-    conv_params = np.reshape(
+    conv_params = tf.reshape(
         conv_params, (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
     )
-    pool_params = np.ravel(pool_params)
+    pool_params = tf.keras.ops.ravel(pool_params)
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
@@ -98,7 +98,7 @@ def fully_connected_op(
 ) -> None:
     """Creates a fully connected layer. Which consists of ry gates a cnot chain and then cnot gates connecting the ryed b and x wires"""
     assert (
-        len(b_params) == len(x_wires) == len(b_wires) == weight_params.shape[1]
+        b_params.shape[0] == len(x_wires) == len(b_wires) == weight_params.shape[1]
     ), "params and wires must have the same length"
     assert (
         weight_params.shape[1] - 1 == weight_params.shape[0]
