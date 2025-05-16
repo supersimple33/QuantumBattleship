@@ -127,6 +127,13 @@ def prob_extraction(x):
     return x[..., 1]
 
 
+@tf.function
+def custom_accuracy(y_true, y_pred):
+    y_true = tf.squeeze(y_true)
+    y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
+    return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
+
+
 class PatchedKerasLayer(qml.qnn.KerasLayer):
     def call(self, inputs):
         """Evaluates the QNode on input data using the initialized weights.
@@ -167,7 +174,8 @@ class PatchedKerasLayer(qml.qnn.KerasLayer):
 
         if isinstance(res, (list, tuple)):
             # multi-return and no batch dim
-            return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
+            # return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
+            return tf.convert_to_tensor(res)
 
         return res
 
