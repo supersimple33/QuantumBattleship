@@ -2,13 +2,29 @@ import pennylane as qml
 
 from pennylane import numpy as np
 
-# import numpy as np
+import numpy as nnp
 from pennylane.wires import WiresLike
 from typing import Union
 import torch
-import tensorflow as tf
+
+from qiskit import QuantumCircuit
+from qiskit.quantum_info import Statevector
+from functools import reduce
+
+# import tensorflow as tf
 
 np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
+
+
+def hots_to_sv(x: nnp.ndarray[np_floats]) -> nnp.ndarray[np_floats]:
+    """Converts list of qubit rotations to a statevector"""
+    assert len(x.shape) == 1, "x must be a 1D array"
+
+    qc = QuantumCircuit(len(x))
+    [qc.rx(nnp.pi * e, len(x) - i - 1) for i, e in enumerate(x)]
+    sv = Statevector.from_instruction(qc)
+    return sv.data.astype(nnp.complex64)
+
 
 # def convolution_layer(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 #     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
@@ -54,17 +70,17 @@ def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) ->
 
 
 def convolution_pooling_op(
-    conv_params: np.ndarray[np_floats] | tf.Tensor,
-    pool_params: np.ndarray[np_floats] | tf.Tensor,
+    conv_params: np.ndarray[np_floats] | torch.Tensor,
+    pool_params: np.ndarray[np_floats] | torch.Tensor,
     wire_arr: np.ndarray,
     STRIDE: int,
 ) -> None:
     KERNEL_SIZE = conv_params.shape[1]
     N = wire_arr.shape[0]
-    conv_params = tf.reshape(
+    conv_params = torch.reshape(
         conv_params, (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
     )
-    pool_params = tf.keras.ops.ravel(pool_params)
+    pool_params = torch.ravel(pool_params)
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
@@ -127,57 +143,57 @@ def prob_extraction(x):
     return x[..., 1]
 
 
-@tf.function
-def custom_accuracy(y_true, y_pred):
-    y_true = tf.squeeze(y_true)
-    y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
-    return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
+# @tf.function
+# def custom_accuracy(y_true, y_pred):
+#     y_true = tf.squeeze(y_true)
+#     y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
+#     return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
 
 
-class PatchedKerasLayer(qml.qnn.KerasLayer):
-    def call(self, inputs):
-        """Evaluates the QNode on input data using the initialized weights.
+# class PatchedKerasLayer(qml.qnn.KerasLayer):
+#     def call(self, inputs):
+#         """Evaluates the QNode on input data using the initialized weights.
 
-        Args:
-            inputs (tensor): data to be processed
+#         Args:
+#             inputs (tensor): data to be processed
 
-        Returns:
-            tensor: output data
-        """
-        inputs = tf.transpose(inputs, perm=(1, 2, 0))
+#         Returns:
+#             tensor: output data
+#         """
+#         inputs = tf.transpose(inputs, perm=(1, 2, 0))
 
-        # calculate the forward pass as usual
-        results = self._evaluate_qnode(inputs)
+#         # calculate the forward pass as usual
+#         results = self._evaluate_qnode(inputs)
 
-        # reshape to the correct number of batch dims
-        # if has_batch_dim:
-        #     # pylint:disable=unexpected-keyword-arg,no-value-for-parameter
-        #     new_shape = tf.concat([batch_dims, tf.shape(results)[1:]], axis=0)
-        #     results = tf.reshape(results, new_shape)
+#         # reshape to the correct number of batch dims
+#         # if has_batch_dim:
+#         #     # pylint:disable=unexpected-keyword-arg,no-value-for-parameter
+#         #     new_shape = tf.concat([batch_dims, tf.shape(results)[1:]], axis=0)
+#         #     results = tf.reshape(results, new_shape)
 
-        return results
+#         return results
 
-    def _evaluate_qnode(self, x):
-        """Evaluates a QNode for a single input datapoint.
+#     def _evaluate_qnode(self, x):
+#         """Evaluates a QNode for a single input datapoint.
 
-        Args:
-            x (tensor): the datapoint
+#         Args:
+#             x (tensor): the datapoint
 
-        Returns:
-            tensor: output datapoint
-        """
-        kwargs = {
-            **{self.input_arg: x},
-            **{k: 1.0 * w for k, w in self.qnode_weights.items()},
-        }
-        res = self.qnode(**kwargs)
+#         Returns:
+#             tensor: output datapoint
+#         """
+#         kwargs = {
+#             **{self.input_arg: x},
+#             **{k: 1.0 * w for k, w in self.qnode_weights.items()},
+#         }
+#         res = self.qnode(**kwargs)
 
-        if isinstance(res, (list, tuple)):
-            # multi-return and no batch dim
-            # return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
-            return tf.convert_to_tensor(res)
+#         if isinstance(res, (list, tuple)):
+#             # multi-return and no batch dim
+#             # return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
+#             return tf.convert_to_tensor(res)
 
-        return res
+#         return res
 
 
 # MARK: - PyTorch Stuff
