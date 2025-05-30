@@ -127,5 +127,5 @@ def prob_extraction(x):
 @tf.function
 def custom_accuracy(y_true, y_pred):
     y_true = tf.squeeze(y_true)
-    y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
+    y_pred = tf.squeeze(tf.where(y_pred >= 0, 1.0, -1.0))
     return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
