@@ -5,13 +5,13 @@ from pennylane import numpy as np
 import numpy as nnp
 from pennylane.wires import WiresLike
 from typing import Union
-import torch
+
+# import torch
+import tensorflow as tf
 
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
 from functools import reduce
-
-# import tensorflow as tf
 
 np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 
@@ -26,29 +26,10 @@ def hots_to_sv(x: nnp.ndarray[np_floats]) -> nnp.ndarray[np_floats]:
     return sv.data.astype(nnp.complex64)
 
 
-# def convolution_layer(params: np.ndarray[np_floats], wires: WiresLike) -> None:
-#     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
-#     assert len(params.shape) == 2, "params must be a 2D array"
-#     assert len(wires) == params.shape[1], "params and wires must have the same length"
-
-#     def _layer(params: np.ndarray) -> None:
-#         for wire in wires:
-#             qml.RY(params[wire], wires=wire)
-
-#         for i in range(len(wires) - 1):
-#             qml.CNOT(wires=[wires[i], wires[-1]])
-
-#     qml.layer(
-#         _layer,
-#         params.shape[0],
-#         params,
-#     )
-
-
 def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
     assert len(wires) == params.shape[1], "params and wires must have the same length"
-    assert wires is not torch.Tensor, "wires must be a list of wires"
+    assert type(wires) is list, "wires must be a list of wires"
     qml.BasicEntanglerLayers(
         params,
         wires,
@@ -58,7 +39,7 @@ def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 
 def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) -> None:
     """Creates a pooling layer. Which consists of 4 rotations a CNOT and a unrotation of the target qubit"""
-    assert wires is not torch.Tensor, "wires must be a list of wires"
+    assert type(wires) is list, "wires must be a list of wires"
 
     for i, wire in enumerate(wires):
         qml.RY(params[i], wires=wire)
@@ -70,17 +51,17 @@ def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) ->
 
 
 def convolution_pooling_op(
-    conv_params: np.ndarray[np_floats] | torch.Tensor,
-    pool_params: np.ndarray[np_floats] | torch.Tensor,
+    conv_params: np.ndarray[np_floats],
+    pool_params: np.ndarray[np_floats],
     wire_arr: np.ndarray,
     STRIDE: int,
 ) -> None:
     KERNEL_SIZE = conv_params.shape[1]
     N = wire_arr.shape[0]
-    conv_params = torch.reshape(
+    conv_params = tf.reshape(
         conv_params, (conv_params.shape[0], conv_params.shape[1] * conv_params.shape[2])
     )
-    pool_params = torch.ravel(pool_params)
+    pool_params = tf.keras.ops.ravel(pool_params)
 
     # Convolution layer
     for k in range(0, KERNEL_SIZE, STRIDE):
@@ -119,8 +100,8 @@ def fully_connected_op(
     assert (
         weight_params.shape[1] - 1 == weight_params.shape[0]
     ), "params must be a square matrix"
-    assert x_wires is not torch.Tensor, "wires must be a list of wires"
-    assert b_wires is not torch.Tensor, "wires must be a list of wires"
+    assert type(x_wires) is list, "wires must be a list of wires"
+    assert type(b_wires) is list, "wires must be a list of wires"
 
     for i in range(weight_params.shape[0]):
         for j in range(len(x_wires)):
@@ -143,117 +124,8 @@ def prob_extraction(x):
     return x[..., 1]
 
 
-# @tf.function
-# def custom_accuracy(y_true, y_pred):
-#     y_true = tf.squeeze(y_true)
-#     y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
-#     return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
-
-
-# class PatchedKerasLayer(qml.qnn.KerasLayer):
-#     def call(self, inputs):
-#         """Evaluates the QNode on input data using the initialized weights.
-
-#         Args:
-#             inputs (tensor): data to be processed
-
-#         Returns:
-#             tensor: output data
-#         """
-#         inputs = tf.transpose(inputs, perm=(1, 2, 0))
-
-#         # calculate the forward pass as usual
-#         results = self._evaluate_qnode(inputs)
-
-#         # reshape to the correct number of batch dims
-#         # if has_batch_dim:
-#         #     # pylint:disable=unexpected-keyword-arg,no-value-for-parameter
-#         #     new_shape = tf.concat([batch_dims, tf.shape(results)[1:]], axis=0)
-#         #     results = tf.reshape(results, new_shape)
-
-#         return results
-
-#     def _evaluate_qnode(self, x):
-#         """Evaluates a QNode for a single input datapoint.
-
-#         Args:
-#             x (tensor): the datapoint
-
-#         Returns:
-#             tensor: output datapoint
-#         """
-#         kwargs = {
-#             **{self.input_arg: x},
-#             **{k: 1.0 * w for k, w in self.qnode_weights.items()},
-#         }
-#         res = self.qnode(**kwargs)
-
-#         if isinstance(res, (list, tuple)):
-#             # multi-return and no batch dim
-#             # return tf.transpose(tf.convert_to_tensor(res), perm=(1, 0, 2))
-#             return tf.convert_to_tensor(res)
-
-#         return res
-
-
-# MARK: - PyTorch Stuff
-
-
-class ProbExtractionLayer(torch.nn.Module):
-    def __init__(self):
-        super(ProbExtractionLayer, self).__init__()
-
-    # def forward(self, x):
-    #     # assert x.shape[-1] == 2, "The last dimension must have size 2"
-    #     return x[..., 1]
-
-    def forward(self, x):
-        # Convert expectation values to probabilities of measuring 1
-        return (x + 1) / 2
-
-
-class PatchedTorchLayer(qml.qnn.TorchLayer):
-    """this patch allows us to use 2d inputs and weights"""
-
-    def forward(self, inputs):  # pylint: disable=arguments-differ
-        """Evaluates a forward pass through the QNode based upon input data and the initialized
-        weights.
-
-        Args:
-            inputs (tensor): data to be processed
-
-        Returns:
-            tensor: output data
-        """
-
-        # in case the input has more than one batch dimension
-
-        # calculate the forward pass as usual
-        results = self._evaluate_qnode(inputs)
-
-        if isinstance(results, tuple):
-            return torch.stack(results, dim=0)
-
-        # reshape to the correct number of batch dims
-
-        return results
-
-    def _evaluate_qnode(self, x):
-        """Evaluates the QNode for a single input datapoint.
-
-        Args:
-            x (tensor): the datapoint
-
-        Returns:
-            tensor: output datapoint
-        """
-        kwargs = {
-            **{self.input_arg: x},
-            **{arg: weight.to(x) for arg, weight in self.qnode_weights.items()},
-        }
-        res = self.qnode(**kwargs)
-
-        if isinstance(res, torch.Tensor):
-            return res.type(x.dtype)
-
-        return torch.hstack(res).type(x.dtype)
+@tf.function
+def custom_accuracy(y_true, y_pred):
+    y_true = tf.squeeze(y_true)
+    y_pred = tf.where(y_pred >= 0, 1.0, -1.0)
+    return tf.keras.backend.mean(tf.keras.backend.equal(y_true, y_pred))
