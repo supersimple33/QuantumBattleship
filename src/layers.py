@@ -21,8 +21,8 @@ def hots_to_sv(x: nnp.ndarray[np_floats]) -> nnp.ndarray[np_floats]:
     assert len(x.shape) == 1, "x must be a 1D array"
 
     qc = QuantumCircuit(len(x))
-    [qc.rx(nnp.pi * e, len(x) - i - 1) for i, e in enumerate(x)]
-    sv = Statevector.from_instruction(qc)
+    [qc.rx(nnp.pi * e, i) for i, e in enumerate(x)]
+    sv = Statevector.from_instruction(qc).reverse_qargs()
     return sv.data.astype(nnp.complex64)
 
 
