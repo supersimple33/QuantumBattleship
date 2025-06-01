@@ -10,8 +10,10 @@ from typing import Union
 import tensorflow as tf
 
 from qiskit import QuantumCircuit
+from qiskit.circuit.library import StatePreparation
 from qiskit.quantum_info import Statevector
 from functools import reduce
+from itertools import chain
 
 np_floats = Union[np.float16, np.float32, np.float64, np.longdouble]
 
@@ -22,6 +24,43 @@ def hots_to_sv(x: nnp.ndarray[np_floats]) -> nnp.ndarray[np_floats]:
 
     qc = QuantumCircuit(len(x))
     [qc.rx(nnp.pi * e, i) for i, e in enumerate(x)]
+    sv = Statevector.from_instruction(qc).reverse_qargs()
+    return sv.data.astype(nnp.complex64)
+
+
+def generate_esv(*x: int, horiz: bool, noise=0.05):
+    """Color the x1 and x2 rows or columns of a 4x4 grid and then apply noise"""
+    assert 1 <= len(x) <= 3, "x must be a list of 1 to 4 integers"
+    assert all(0 <= i < 4 for i in x), "x must be a list of integers between 0 and 3"
+    assert len(set(x)) == len(x), "x must be a list of unique integers"
+
+    qc = QuantumCircuit(16)
+    # apply hadamard to a qubit which isn't active
+    xs = [
+        [i + xi * 4 for i in range(4)] if horiz else [xi + i * 4 for i in range(4)]
+        for xi in x
+    ]
+    unused = list(set(range(16)) - set(chain(*xs)))[:4]
+
+    # entangle the two possible rows and or columns
+    # uniform = sum(Statevector.from_int(i, dims=2**4) for i in range(len(x)))
+    uniform = reduce(
+        lambda a, b: a + b,
+        (Statevector.from_int(i, dims=2**4) for i in range(len(x))),
+    )
+    qc.append(
+        StatePreparation(uniform, normalize=True),
+        unused,
+    )
+    [[qc.mcx(unused, j, ctrl_state=i) for j in xis] for i, xis in enumerate(xs)]
+    qc.append(
+        StatePreparation(uniform, normalize=True, inverse=True),
+        unused,
+    )
+
+    # apply noise
+    [qc.rx(nnp.random.normal(0, noise * nnp.pi), i) for i in range(16)]
+
     sv = Statevector.from_instruction(qc).reverse_qargs()
     return sv.data.astype(nnp.complex64)
 
