@@ -160,6 +160,43 @@ def fully_connected_op(
             qml.RY(-b_params[i], wires=b_wires[i])
 
 
+def compressed_fc_op(
+    weight_params: np.ndarray[np_floats],
+    b_params: np.ndarray[np_floats],
+    x_wires: WiresLike,
+    b_wires: WiresLike,
+) -> None:
+    """Creates a compressed fully connected layer. Just as the last layer except that it does not have full b wires"""
+    assert weight_params.shape[1] == len(
+        x_wires
+    ), "params and wires must have the same length"
+    # assert len(b_wire) == 1, "b_wire must be a single wire"
+    assert len(b_params.shape) == 1, "b_params must be a 1D array"
+    assert b_params.shape[0] >= len(
+        b_wires
+    ), "b_params must be at least as long as b_wires"
+    assert (
+        len(x_wires) >= b_params.shape[0]
+    ), "x_wires must be at least as long as b_params"
+    assert isinstance(x_wires, list | nnp.ndarray), "wires must be a list of wires"
+    assert isinstance(b_wires, list | nnp.ndarray), "wires must be a list of wires"
+
+    for i in range(weight_params.shape[0]):
+        for j in range(len(x_wires)):
+            qml.RY(weight_params[i, j], wires=x_wires[j])
+        for j in range(len(x_wires)):
+            qml.CNOT(
+                wires=[x_wires[j % len(x_wires)], x_wires[(i + j + 1) % len(x_wires)]]
+            )
+
+    for i in range(0, b_params.shape[0], len(b_wires)):
+        window = list(range(i, min(i + len(b_wires), b_params.shape[0])))
+        for k_wire, j in enumerate(window):
+            qml.RY(b_params[j], wires=b_wires[k_wire])
+            qml.CNOT(wires=[b_wires[k_wire], x_wires[j]])
+            qml.RY(-b_params[j], wires=b_wires[k_wire])
+
+
 # MARK: - TensorFlow Stuff
 
 
