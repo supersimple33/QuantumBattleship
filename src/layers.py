@@ -68,7 +68,7 @@ def generate_esv(*x: int, horiz: bool, noise=0.05):
 def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
     """Creates a convolution layer. Which consists of ry gates and entangling gates repeated according to the shape of the params"""
     assert len(wires) == params.shape[1], "params and wires must have the same length"
-    assert type(wires) is list, "wires must be a list of wires"
+    isinstance(wires, list | nnp.ndarray), "wires must be a list of wires"
     qml.BasicEntanglerLayers(
         params,
         wires,
@@ -78,7 +78,7 @@ def convolution_op(params: np.ndarray[np_floats], wires: WiresLike) -> None:
 
 def pooling_op(params: np.ndarray[np_floats] | list[float], wires: WiresLike) -> None:
     """Creates a pooling layer. Which consists of 4 rotations a CNOT and a unrotation of the target qubit"""
-    assert type(wires) is list, "wires must be a list of wires"
+    assert isinstance(wires, list | nnp.ndarray), "wires must be a list of wires"
 
     for i, wire in enumerate(wires):
         qml.RY(params[i], wires=wire)
@@ -140,8 +140,8 @@ def fully_connected_op(
     assert (
         weight_params.shape[1] - 1 == weight_params.shape[0]
     ), "params must be a square matrix"
-    assert type(x_wires) is list, "wires must be a list of wires"
-    assert type(b_wires) is list, "wires must be a list of wires"
+    assert isinstance(x_wires, list | nnp.ndarray), "wires must be a list of wires"
+    assert isinstance(b_wires, list | nnp.ndarray), "wires must be a list of wires"
 
     for i in range(weight_params.shape[0]):
         for j in range(len(x_wires)):
