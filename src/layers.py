@@ -131,6 +131,7 @@ def fully_connected_op(
     b_params: np.ndarray[np_floats],
     x_wires: WiresLike,
     b_wires: WiresLike,
+    uncompute: bool = False,
 ) -> None:
     """Creates a fully connected layer. Which consists of ry gates a cnot chain and then cnot gates connecting the ryed b and x wires"""
     assert (
@@ -154,6 +155,9 @@ def fully_connected_op(
         qml.RY(b_params[i], wires=b_wires[i])
     for i in range(len(b_wires)):
         qml.CNOT(wires=[b_wires[i], x_wires[i]])
+    if uncompute:
+        for i in range(len(b_wires)):
+            qml.RY(-b_params[i], wires=b_wires[i])
 
 
 # MARK: - TensorFlow Stuff
